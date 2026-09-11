@@ -1,0 +1,5 @@
+llm:
+  real:
+    endpoint: ${LLM_ENDPOINT}
+    api-key: ${LLM_API_KEY}
+  timeout-seconds: ${LLM_TIMEOUT_SECONDS:10}

@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:tickets;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+llm:
+  mock:
+    mode: success # success, invalid, or failure (useful for demonstrating failure paths)
+    delay-ms: 100
+  timeout-seconds: 10
