@@ -21,6 +21,8 @@ public class RealTicketAnalysisProvider implements TicketAnalysisProvider {
     private final HttpClient client;
     private final String endpoint;
     private final String apiKey;
+    private final String authHeader;
+    private final String authPrefix;
     private final String model;
     private final Duration timeout;
     private final Resource promptTemplate;
@@ -28,11 +30,15 @@ public class RealTicketAnalysisProvider implements TicketAnalysisProvider {
 
     public RealTicketAnalysisProvider(@Value("${llm.real.endpoint}") String endpoint,
             @Value("${llm.real.api-key}") String apiKey, @Value("${llm.real.model:gpt-5.4-1}") String model,
+            @Value("${llm.real.auth-header:api-key}") String authHeader,
+            @Value("${llm.real.auth-prefix:}") String authPrefix,
             @Value("${llm.timeout-seconds:10}") long timeoutSeconds,
             @Value("classpath:prompts/ticket-analysis-prompt.md") Resource promptTemplate, ObjectMapper objectMapper) {
         this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(timeoutSeconds)).build();
         this.endpoint = endpoint;
         this.apiKey = apiKey;
+        this.authHeader = authHeader;
+        this.authPrefix = authPrefix;
         this.model = model;
         this.timeout = Duration.ofSeconds(timeoutSeconds);
         this.promptTemplate = promptTemplate;
@@ -48,9 +54,12 @@ public class RealTicketAnalysisProvider implements TicketAnalysisProvider {
                     .replace("{{product}}", ticket.getProduct() == null ? "" : ticket.getProduct());
             String requestBody = objectMapper.createObjectNode().put("model", model).put("input", prompt).toString();
             HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint)).timeout(timeout)
-                    .header("Content-Type", "application/json").header("api-key", apiKey)
+                    .header("Content-Type", "application/json; charset=UTF-8")
+                    .header("Accept", "application/json")
+                    .header(authHeader, authPrefix + apiKey)
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody)).build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = client.send(request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300)
                 throw new IllegalStateException("LLM provider returned a non-success status");
             return extractOutput(response.body());

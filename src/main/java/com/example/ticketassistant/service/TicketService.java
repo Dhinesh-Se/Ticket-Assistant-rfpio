@@ -1,6 +1,8 @@
 package com.example.ticketassistant.service;
 
-import com.example.ticketassistant.dto.*;
+import com.example.ticketassistant.dto.CreateTicketRequest;
+import com.example.ticketassistant.dto.TicketAnalysisResponse;
+import com.example.ticketassistant.dto.TicketResponse;
 import com.example.ticketassistant.entity.Ticket;
 import com.example.ticketassistant.entity.TicketAnalysis;
 import com.example.ticketassistant.exception.TicketNotFoundException;

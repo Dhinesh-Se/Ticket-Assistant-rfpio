@@ -27,10 +27,10 @@ public class AnalysisResponseValidator {
             while (fields.hasNext())
                 if (!REQUIRED.contains(fields.next()))
                     throw new InvalidAnalysisException("Analysis contains unexpected fields");
-            String category = requiredText(root, "category", 100);
+            String category = requiredIdentifier(root, "category");
             String summary = requiredText(root, "summary", 2000);
             String suggestedResponse = requiredText(root, "suggestedResponse", 4000);
-            String team = requiredText(root, "recommendedTeam", 100);
+            String team = requiredIdentifier(root, "recommendedTeam");
             JsonNode confidenceNode = root.get("confidence");
             if (confidenceNode == null || !confidenceNode.isNumber())
                 throw new InvalidAnalysisException("Confidence must be numeric");
@@ -50,5 +50,12 @@ public class AnalysisResponseValidator {
         if (node == null || !node.isTextual() || node.asText().isBlank() || node.asText().length() > maxLength)
             throw new InvalidAnalysisException("Invalid " + field);
         return node.asText().trim();
+    }
+
+    private String requiredIdentifier(JsonNode root, String field) {
+        String value = requiredText(root, field, 100);
+        if (!value.matches("[A-Z][A-Z0-9_]*"))
+            throw new InvalidAnalysisException("Invalid " + field);
+        return value;
     }
 }

@@ -73,8 +73,37 @@ class AsyncTicketAnalysisServiceTest {
                 () -> validator.validate("{\"category\":\"IMPORT_FAILURE\",\"confidence\":0.8}"));
     }
 
+    @Test
+    void rejectsUnexpectedFieldsNullValuesAndInvalidConfidence() {
+        AnalysisResponseValidator validator = new AnalysisResponseValidator(new ObjectMapper());
+        String valid = "\"category\":\"IMPORT_FAILURE\",\"summary\":\"Import fails\","
+                + "\"suggestedResponse\":\"We are reviewing it.\",\"recommendedTeam\":\"SUPPORT\"";
+
+        assertThrows(RuntimeException.class,
+                () -> validator.validate("{" + valid + ",\"extra\":true,\"confidence\":0.8}"));
+        assertThrows(RuntimeException.class, () -> validator.validate("{\"category\":null,\"summary\":\"Import fails\","
+                + "\"suggestedResponse\":\"We are reviewing it.\",\"recommendedTeam\":\"SUPPORT\",\"confidence\":0.8}"));
+        assertThrows(RuntimeException.class, () -> validator.validate("{" + valid + ",\"confidence\":1.1}"));
+        assertThrows(RuntimeException.class, () -> validator.validate("{" + valid + ",\"confidence\":-0.1}"));
+        assertThrows(RuntimeException.class,
+                () -> validator.validate("{" + valid.replace("IMPORT_FAILURE", "ImportFailure")
+                        + ",\"confidence\":0.8}"));
+    }
+
+    @Test
+    void skipsDuplicateWorkerWhenTicketWasAlreadyClaimed() {
+        AsyncTicketAnalysisService analysisService = service();
+        when(tickets.claimPending("id", ProcessingStatus.PENDING, ProcessingStatus.PROCESSING)).thenReturn(0);
+        analysisService.analyze("id");
+
+        verify(provider, never()).analyze(any());
+        verify(tickets, never()).findById("id");
+    }
+
     private AsyncTicketAnalysisService service() {
-        return new AsyncTicketAnalysisService(tickets, analyses, provider,
+        lenient().when(tickets.claimPending("id", ProcessingStatus.PENDING, ProcessingStatus.PROCESSING))
+                .thenReturn(1);
+        return new AsyncTicketAnalysisService(new TicketAnalysisPersistenceService(tickets, analyses), provider,
                 new AnalysisResponseValidator(new ObjectMapper()));
     }
 

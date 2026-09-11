@@ -1,48 +1,40 @@
 package com.example.ticketassistant.service;
 
 import com.example.ticketassistant.entity.Ticket;
-import com.example.ticketassistant.entity.TicketAnalysis;
+import com.example.ticketassistant.exception.InvalidAnalysisException;
+import com.example.ticketassistant.llm.LlmTimeoutException;
 import com.example.ticketassistant.llm.TicketAnalysisProvider;
 import com.example.ticketassistant.llm.ValidatedAnalysis;
-import com.example.ticketassistant.repository.TicketAnalysisRepository;
-import com.example.ticketassistant.repository.TicketRepository;
-import jakarta.transaction.Transactional;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AsyncTicketAnalysisService {
-    private final TicketRepository tickets;
-    private final TicketAnalysisRepository analyses;
+    private final TicketAnalysisPersistenceService persistence;
     private final TicketAnalysisProvider provider;
     private final AnalysisResponseValidator validator;
 
-    public AsyncTicketAnalysisService(TicketRepository tickets, TicketAnalysisRepository analyses,
-            TicketAnalysisProvider provider, AnalysisResponseValidator validator) {
-        this.tickets = tickets;
-        this.analyses = analyses;
+    public AsyncTicketAnalysisService(TicketAnalysisPersistenceService persistence, TicketAnalysisProvider provider,
+            AnalysisResponseValidator validator) {
+        this.persistence = persistence;
         this.provider = provider;
         this.validator = validator;
     }
 
     @Async("ticketAnalysisExecutor")
-    @Transactional
     public void analyze(String ticketId) {
-        Ticket ticket = tickets.findById(ticketId).orElse(null);
-        if (ticket == null
-                || ticket.getProcessingStatus() != com.example.ticketassistant.entity.ProcessingStatus.PENDING)
+        if (!persistence.claimPending(ticketId))
             return;
-        ticket.markProcessing();
-        tickets.save(ticket);
+
+        Ticket ticket = persistence.find(ticketId).orElse(null);
+        if (ticket == null)
+            return;
+
         try {
             ValidatedAnalysis output = validator.validate(provider.analyze(ticket));
-            analyses.save(new TicketAnalysis(ticket, output.category(), output.summary(), output.suggestedResponse(),
-                    output.recommendedTeam(), output.confidence()));
-            ticket.markCompleted();
-            tickets.save(ticket);
-        } catch (Exception ignored) {
-            ticket.markFailed("Analysis could not be completed. Please try again later.");
-            tickets.save(ticket);
+            persistence.complete(ticketId, output);
+        } catch (LlmTimeoutException | InvalidAnalysisException | IllegalStateException e) {
+            persistence.fail(ticketId);
         }
     }
 }

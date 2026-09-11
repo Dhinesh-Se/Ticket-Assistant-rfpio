@@ -42,16 +42,16 @@ llm.mock.mode: success # success, invalid, failure
 llm.mock.delay-ms: 100
 ```
 
-Use `invalid` or `failure` to demonstrate safe failed processing. The `TicketAnalysisProvider` interface keeps domain services independent of an SDK. The mock is deterministic enough for local runs/tests. To select the optional real HTTP adapter, activate the profile and supply secrets outside source control:
+Use `invalid` or `failure` to manually demonstrate safe failed processing. The `TicketAnalysisProvider` interface keeps domain services independent of an SDK. The mock is deterministic enough for local runs/tests. Automated tests cover provider failure and invalid-output handling at the service layer; the configurable mock failure modes are not full REST integration-test profiles. To select the optional real HTTP adapter, activate the profile and supply secrets outside source control:
 
 ```bash
 # Edit .env with your provider values, then run:
 mvn spring-boot:run "-Dspring-boot.run.profiles=real-llm"
 ```
 
-The application optionally imports a root `.env` file as Spring properties. It expects `LLM_ENDPOINT`, `LLM_API_KEY`, `LLM_MODEL` (the Azure deployment name; defaults to `gpt-4.1-mini`), and optionally `LLM_TIMEOUT_SECONDS`. The file is ignored by Git; keep real credentials there and never commit them.
+The application optionally imports a root `.env` file as Spring properties. It expects `LLM_ENDPOINT`, `LLM_API_KEY`, `LLM_MODEL` (defaults to `gpt-4.1-mini`), and optionally `LLM_TIMEOUT_SECONDS`, `LLM_AUTH_HEADER` (defaults to `api-key`), and `LLM_AUTH_PREFIX` (defaults to empty). For an OpenAI-compatible endpoint, set `LLM_AUTH_HEADER=Authorization` and `LLM_AUTH_PREFIX=Bearer `. For an Azure-style endpoint, keep the defaults and provide the deployment-specific endpoint. The file is ignored by Git; keep real credentials there and never commit them.
 
-The adapter uses the JDK `HttpClient`, applies `llm.timeout-seconds` (default 10), renders the repository prompt template, and sends a JSON request shaped as `{ "model": "...", "input": "..." }`. It accepts either the specified analysis JSON directly or a compatible response containing `output_text`/`output[].content[].text`. A real production adapter should still be aligned with the selected provider’s documented request and response envelope.
+The adapter uses the JDK `HttpClient`, applies `llm.timeout-seconds` (default 10), renders the repository prompt template, and sends a JSON request shaped as `{ "model": "...", "input": "..." }` with the configured authentication header. It accepts either the specified analysis JSON directly or a compatible response containing `output_text`/`output[].content[].text`. The request and response envelope are intentionally isolated in this adapter so a provider-specific adapter can replace it without changing the core service. The real provider profile was startup-checked for configuration binding, but it was not verified against a live LLM service in this assessment environment.
 
 ## API
 
@@ -99,7 +99,7 @@ With mock invalid/failure or a provider error it returns status `FAILED`, `analy
 
 ## Structured-output, security, and error handling
 
-The validator rejects malformed JSON, non-object payloads, missing/null/empty fields, extra fields, non-numeric confidence, confidence outside 0–1, and oversized values. Failed output is never persisted. The prompt has explicit role/output rules and separately labels ticket content as untrusted data; embedded ticket instructions cannot override task instructions or request prompt disclosure/command execution.
+The validator rejects malformed JSON, non-object payloads, missing/null/empty fields, extra fields, non-numeric confidence, confidence outside 0–1, oversized values, and category/team values that are not uppercase identifiers. It does not use a fixed allow-list for category or team names, so otherwise well-formed but unfamiliar values remain valid. Failed output is never persisted. The prompt has explicit role/output rules and separately labels ticket content as untrusted data; embedded ticket instructions cannot override task instructions or request prompt disclosure/command execution.
 
 Centralized REST advice consistently returns validation, not-found, and internal errors without stack traces. Async processing errors are stored as a safe state rather than exposed as REST provider details. The application intentionally does not log complete ticket bodies, provider responses, API keys, credentials, or auth headers. API keys are environment variables only. In production add PII redaction/classification, encryption and retention controls, secret management, audit policy, and access controls.
 
@@ -109,7 +109,7 @@ Centralized REST advice consistently returns validation, not-found, and internal
 mvn test
 ```
 
-Tests cover HTTP creation/validation/404 via MockMvc and Mockito-driven successful analysis, invalid JSON, and provider exception failure paths. The integration test uses delayed mock analysis so the creation response can reliably assert `PENDING`.
+Tests cover HTTP creation/validation/404 via MockMvc, eventual completed analysis with all five fields, and Mockito-driven successful analysis, incomplete/invalid structured output, timeout, and provider failure paths. The integration test uses delayed mock analysis so the creation response can reliably assert `PENDING`; mock `invalid` and `failure` configuration modes remain manual demonstration paths rather than separate REST integration profiles.
 
 ## Assumptions and limitations
 

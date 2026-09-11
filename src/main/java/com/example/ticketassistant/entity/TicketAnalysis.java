@@ -30,12 +30,20 @@ public class TicketAnalysis {
 
     public TicketAnalysis(Ticket ticket, String category, String summary, String suggestedResponse,
             String recommendedTeam, double confidence) {
+        if (!isIdentifier(category) || !isIdentifier(recommendedTeam))
+            throw new IllegalArgumentException("Category and recommended team must be uppercase identifiers");
+        if (!Double.isFinite(confidence) || confidence < 0 || confidence > 1)
+            throw new IllegalArgumentException("Confidence must be between 0 and 1");
         this.ticket = ticket;
         this.category = category;
         this.summary = summary;
         this.suggestedResponse = suggestedResponse;
         this.recommendedTeam = recommendedTeam;
         this.confidence = confidence;
+    }
+
+    private boolean isIdentifier(String value) {
+        return value != null && value.matches("[A-Z][A-Z0-9_]*");
     }
 
     @PrePersist
