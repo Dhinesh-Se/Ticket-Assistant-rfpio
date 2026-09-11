@@ -1,2 +1,7 @@
 package com.example.ticketassistant.exception;
-public class TicketNotFoundException extends RuntimeException { public TicketNotFoundException(String id) { super("Ticket not found: " + id); } }
+
+public class TicketNotFoundException extends RuntimeException {
+    public TicketNotFoundException(String id) {
+        super("Ticket not found: " + id);
+    }
+}

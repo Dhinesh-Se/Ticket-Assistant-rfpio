@@ -16,12 +16,12 @@ Status lifecycle: `PENDING -> PROCESSING -> COMPLETED`, or `PENDING -> PROCESSIN
 
 ## Stack and layout
 
-* Java 17 target, Spring Boot, Spring MVC, Spring Data JPA, H2, JUnit 5, Mockito, and MockMvc.
-* `entity/` has the compact JPA model and lifecycle enums.
-* `service/` contains transactional creation, async orchestration, and strict JSON validation.
-* `llm/` contains the application-level provider port plus mock and configurable HTTP adapters.
-* `controller/`, `dto/`, and `exception/` form the REST boundary.
-* `src/main/resources/prompts/ticket-analysis-prompt.md` is the provider prompt template.
+- Java 17 target, Spring Boot, Spring MVC, Spring Data JPA, H2, JUnit 5, Mockito, and MockMvc.
+- `entity/` has the compact JPA model and lifecycle enums.
+- `service/` contains transactional creation, async orchestration, and strict JSON validation.
+- `llm/` contains the application-level provider port plus mock and configurable HTTP adapters.
+- `controller/`, `dto/`, and `exception/` form the REST boundary.
+- `src/main/resources/prompts/ticket-analysis-prompt.md` is the provider prompt template.
 
 ## Prerequisites, setup, and run
 
@@ -45,11 +45,13 @@ llm.mock.delay-ms: 100
 Use `invalid` or `failure` to demonstrate safe failed processing. The `TicketAnalysisProvider` interface keeps domain services independent of an SDK. The mock is deterministic enough for local runs/tests. To select the optional real HTTP adapter, activate the profile and supply secrets outside source control:
 
 ```bash
-LLM_ENDPOINT=https://provider.example/analysis LLM_API_KEY=replace-me \
-  mvn spring-boot:run -Dspring-boot.run.profiles=real-llm
+# Edit .env with your provider values, then run:
+mvn spring-boot:run "-Dspring-boot.run.profiles=real-llm"
 ```
 
-The adapter uses the JDK `HttpClient`, applies `llm.timeout-seconds` (default 10), renders the repository prompt template, sends it as `{ "prompt": "..." }`, and expects the endpoint response body to be the specified analysis JSON directly. A real production adapter would convert the dedicated prompt template to the selected provider’s request/response envelope.
+The application optionally imports a root `.env` file as Spring properties. It expects `LLM_ENDPOINT`, `LLM_API_KEY`, `LLM_MODEL` (the Azure deployment name; defaults to `gpt-4.1-mini`), and optionally `LLM_TIMEOUT_SECONDS`. The file is ignored by Git; keep real credentials there and never commit them.
+
+The adapter uses the JDK `HttpClient`, applies `llm.timeout-seconds` (default 10), renders the repository prompt template, and sends a JSON request shaped as `{ "model": "...", "input": "..." }`. It accepts either the specified analysis JSON directly or a compatible response containing `output_text`/`output[].content[].text`. A real production adapter should still be aligned with the selected provider’s documented request and response envelope.
 
 ## API
 
@@ -64,7 +66,11 @@ curl -i -X POST http://localhost:8080/api/tickets \
 Returns `201 Created`, a `Location` header, a UUID `ticketId`, and initially `PENDING` with `analysis: null`. Invalid/missing fields or an invalid priority return `400`:
 
 ```json
-{"status":400,"error":"VALIDATION_ERROR","message":"Request fields are missing or invalid."}
+{
+  "status": 400,
+  "error": "VALIDATION_ERROR",
+  "message": "Request fields are missing or invalid."
+}
 ```
 
 ### Retrieve a ticket
@@ -76,7 +82,17 @@ curl http://localhost:8080/api/tickets/{ticketId}
 While pending/processing, `analysis` is `null`. On success it includes:
 
 ```json
-{"ticketId":"...","status":"COMPLETED","analysis":{"category":"IMPORT_FAILURE","summary":"...","suggestedResponse":"...","recommendedTeam":"SUPPORT","confidence":0.85}}
+{
+  "ticketId": "...",
+  "status": "COMPLETED",
+  "analysis": {
+    "category": "IMPORT_FAILURE",
+    "summary": "...",
+    "suggestedResponse": "...",
+    "recommendedTeam": "SUPPORT",
+    "confidence": 0.85
+  }
+}
 ```
 
 With mock invalid/failure or a provider error it returns status `FAILED`, `analysis: null`, and a safe generic `processingError`. A missing ID returns `404` with `TICKET_NOT_FOUND`.
@@ -97,12 +113,12 @@ Tests cover HTTP creation/validation/404 via MockMvc and Mockito-driven successf
 
 ## Assumptions and limitations
 
-* The app is intentionally a single-node demonstration with H2 and in-process async work.
-* Only one analysis job is accepted because the worker proceeds only from `PENDING`; the current design does not expose regeneration.
-* There is no retry: temporary failures become `FAILED` and can be retried operationally by a future feature.
-* The generic real adapter is intentionally provider-neutral, not a full vendor SDK integration.
-* Approximate implementation time: 5–7 hours.
-* AI tools used during development: an AI coding assistant was used to scaffold, review, and test the implementation; all design choices and code should be reviewed by the submitter.
+- The app is intentionally a single-node demonstration with H2 and in-process async work.
+- Only one analysis job is accepted because the worker proceeds only from `PENDING`; the current design does not expose regeneration.
+- There is no retry: temporary failures become `FAILED` and can be retried operationally by a future feature.
+- The generic real adapter is intentionally provider-neutral, not a full vendor SDK integration.
+- Approximate implementation time: 5–7 hours.
+- AI tools used during development: an AI coding assistant was used to scaffold, review, and test the implementation; all design choices and code should be reviewed by the submitter.
 
 ## Production Readiness / Future Improvements
 
