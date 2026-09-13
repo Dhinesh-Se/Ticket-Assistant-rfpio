@@ -255,19 +255,6 @@ mvn clean verify
 
 The unit tests instantiate the persistence service with mocked repositories: they do not prove transaction rollback or concurrent database claims. The invalid-request integration test includes an invalid enum, so it does not independently demonstrate every Bean Validation constraint. Mock `invalid`/`failure` modes are manual REST demonstrations, not separate integration-test profiles.
 
-## Review findings and remaining work
-
-The following gaps are **not fixed by this README update**. This is an implementation review, not confirmation that every requirement in the separate assessment document is satisfied.
-
-### Correctness and reliability priorities
-
-1. **Validate request lengths before persistence.** Add `@Size` constraints consistent with database columns and boundary/oversize tests, so invalid input returns `400` rather than `500`.
-2. **Handle dispatch rejection after commit.** [TicketService.java](src/main/java/com/example/ticketassistant/service/TicketService.java) invokes the bounded executor after the ticket has committed. Rejection can return `500` while leaving a saved `PENDING` ticket with no job. Add an explicit rejection policy and separately committed failure transition, or use a transactional outbox/durable queue. A client retry currently risks creating another ticket.
-3. **Cover unexpected worker and persistence failures.** [AsyncTicketAnalysisService.java](src/main/java/com/example/ticketassistant/service/AsyncTicketAnalysisService.java) handles only `LlmTimeoutException`, `InvalidAnalysisException`, and `IllegalStateException`; claim/reload operations are outside its try block. Other runtime/database failures can leave unfinished work, including tickets stuck in `PROCESSING`. Add safe diagnostics, failure-path tests, and reconciliation for stale jobs.
-4. **Serialize mock output with Jackson.** [MockTicketAnalysisProvider.java](src/main/java/com/example/ticketassistant/llm/MockTicketAnalysisProvider.java) hand-escapes quotes and backslashes but not control characters. A valid subject containing an embedded newline or tab can produce invalid JSON and failed analysis even in success mode.
-5. **Harden and test the real adapter.** Align model defaults, close the prompt input stream, preserve thread interruption, and validate required configuration. Use a local HTTP stub to test request/auth construction, supported response envelopes, non-2xx responses, timeouts, malformed responses, and missing output. Replace chained template substitutions so customer text containing template markers is not substituted again.
-6. **Expand validation and transaction tests.** Add independent missing/blank-field tests, optional-product normalization, output length/type boundaries, duplicate JSON keys/trailing content, REST failure modes, queue saturation, concurrent claims, and atomic rollback of analysis/status persistence. The parsed-tree check alone is not a strict raw-JSON duplicate/trailing-content policy.
-
 ### Production work deliberately out of scope
 
 - Durable database, versioned migrations, backups, and retention policy.
